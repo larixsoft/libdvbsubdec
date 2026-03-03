@@ -1,0 +1,11 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Find required dependencies (if any)
+# find_dependency(RequiredDependency)
+
+# Include the targets file
+include("${CMAKE_CURRENT_LIST_DIR}/dvbsubdecTargets.cmake")
+
+check_required_components(dvbsubdec)
