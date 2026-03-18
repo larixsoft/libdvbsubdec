@@ -164,6 +164,9 @@ LS_DVBSubDecFinalize(void)
 
     LS_ResetSystemFuncs();
     LS_ResetSystemLogger();
+
+    /* Clean up system port mutexes */
+    LS_FinalizeSystemPort();
   }while (0);
 
   LS_LEAVE("%s: Leave LS_DVBSubDecFinalize()\n", ServiceErrString(ret_val));
@@ -479,12 +482,16 @@ LS_DVBSubDecServicePlay(const LS_ServiceID_t serviceID, const LS_CodedData_t* pe
     return LS_ERROR_GENERAL;
   }
 
+  /* Acquire service mutex for thread-safe access to service state */
+  LS_MutexWait(service->serviceMutex);
+
   service->pmtPageID.ancillaryPageId = pageID.ancillaryPageId;
   service->pmtPageID.compositionPageId = pageID.compositionPageId;
   res = LS_PreProcessPES(pesdata->data, &pesheader);
 
   if (LS_OK != res)
   {
+    LS_MutexSignal(service->serviceMutex);
     LS_ERROR("%s: stream error, abort...\n", ServiceErrString(res));
     return res;
   }
@@ -495,6 +502,10 @@ LS_DVBSubDecServicePlay(const LS_ServiceID_t serviceID, const LS_CodedData_t* pe
     payloadsize = pesheader.PES_packet_length - 3     /*distance to PES_header_data_length(included)*/
                   - pesheader.PES_header_data_length;
     res = ProcessPESPayLoad(service, &pesheader, payload, payloadsize);
+
+    /* Release service mutex after processing */
+    LS_MutexSignal(service->serviceMutex);
+
     return res;
   }
 }

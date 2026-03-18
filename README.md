@@ -89,13 +89,27 @@ libdvbsubdec/
     └── samples/                  # Test PES files
 ```
 
-## Critical Integration Notes
+## Thread Safety
 
-⚠️ **The decoder library is NOT thread-safe.** All decoder operations must occur in the same thread:
+This library is **thread-safe** with the following guarantees:
 
-- **SDL: DON'T use SDL_AddTimer** - callbacks run in separate thread → crashes
+- Multiple service instances can be used concurrently from different threads
+- All API functions are protected by internal mutexes
+- Different services operate independently without blocking each other
+
+**Important:**
+
+- Application callbacks (drawPixmapFunc, cleanRegionFunc, etc.) are invoked with the service mutex held
+- Callbacks **MUST NOT** call back into the library to avoid deadlock
+- Callbacks should be non-blocking to avoid holding locks for extended periods
+
+**Integration recommendations:**
+
+- **SDL: DON'T use SDL_AddTimer** - callbacks run in separate thread with mutex held
 - **SDL: DO use manual timer system** - check timers in main event loop
 - **Qt: Use QTimer** - callbacks run in main thread via Qt event loop (safe)
+
+## Critical Integration Notes
 
 **Shutdown order is critical:**
 

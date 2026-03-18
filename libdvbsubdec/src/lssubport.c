@@ -28,6 +28,8 @@
  *----------------------------------------------------------------------------*/
 static LS_SystemFuncs_t* sSystemFuncs = NULL;
 static LS_SystemLogger_t* sSystemLogger = NULL;
+static LS_Mutex_t         sSystemFuncsMutex = NULL;
+static LS_Mutex_t         sSystemLoggerMutex = NULL;
 
 /*-----------------------------------------------------------------------------
  * public extern APIs
@@ -35,6 +37,8 @@ static LS_SystemLogger_t* sSystemLogger = NULL;
 int32_t
 LS_UpdateSystemFuncs(const LS_SystemFuncs_t sysFuncs)
 {
+  /* First call initialization: no mutex needed (breaks circular dependency)
+   * Mutex will be created after system funcs are stored for subsequent calls */
   if (sSystemFuncs == NULL)
   {
     sSystemFuncs = (LS_SystemFuncs_t*)SYS_MALLOC(sizeof(LS_SystemFuncs_t));
@@ -43,9 +47,32 @@ LS_UpdateSystemFuncs(const LS_SystemFuncs_t sysFuncs)
     {
       return LS_ERROR_SYSTEM_ERROR;
     }
+
+    SYS_MEMCPY((void*)(sSystemFuncs), (void*)&sysFuncs, sizeof(sysFuncs));
+
+    /* Now that system funcs are stored, create mutex for subsequent calls */
+    if (LS_OK != LS_MutexCreate(&sSystemFuncsMutex))
+    {
+      /* Continue without mutex protection rather than fail */
+      LS_WARNING("Failed to create system funcs mutex, continuing without protection\n");
+    }
+
+    return LS_OK;
   }
 
-  SYS_MEMCPY((void*)(sSystemFuncs), (void*)&sysFuncs, sizeof(sysFuncs));
+  /* Subsequent calls: use mutex for thread-safe updates */
+  if (sSystemFuncsMutex != NULL)
+  {
+    LS_MutexWait(sSystemFuncsMutex);
+    SYS_MEMCPY((void*)(sSystemFuncs), (void*)&sysFuncs, sizeof(sysFuncs));
+    LS_MutexSignal(sSystemFuncsMutex);
+  }
+  else
+  {
+    /* Fallback: no mutex protection */
+    SYS_MEMCPY((void*)(sSystemFuncs), (void*)&sysFuncs, sizeof(sysFuncs));
+  }
+
   return LS_OK;
 }
 
@@ -53,6 +80,11 @@ LS_UpdateSystemFuncs(const LS_SystemFuncs_t sysFuncs)
 LS_SystemFuncs_t*
 LS_GetSystemFuncs(void)
 {
+  /* No mutex protection needed:
+   * 1. Read-only operation (just returning a pointer)
+   * 2. Called by LS_MutexWait() internally - would cause infinite recursion
+   * 3. Pointer read is atomic on supported platforms
+   */
   return sSystemFuncs;
 }
 
@@ -60,11 +92,26 @@ LS_GetSystemFuncs(void)
 void
 LS_ResetSystemFuncs(void)
 {
-  if (sSystemFuncs)
+  if (sSystemFuncsMutex != NULL)
   {
-    SYS_MEMSET((void*)sSystemFuncs, 0, sizeof(LS_SystemFuncs_t));
-    SYS_FREE((void*)sSystemFuncs);
-    sSystemFuncs = NULL;
+    LS_MutexWait(sSystemFuncsMutex);
+    if (sSystemFuncs)
+    {
+      SYS_MEMSET((void*)sSystemFuncs, 0, sizeof(LS_SystemFuncs_t));
+      SYS_FREE((void*)sSystemFuncs);
+      sSystemFuncs = NULL;
+    }
+    LS_MutexSignal(sSystemFuncsMutex);
+  }
+  else
+  {
+    /* No mutex yet (during first initialization) */
+    if (sSystemFuncs)
+    {
+      SYS_MEMSET((void*)sSystemFuncs, 0, sizeof(LS_SystemFuncs_t));
+      SYS_FREE((void*)sSystemFuncs);
+      sSystemFuncs = NULL;
+    }
   }
 }
 
@@ -72,6 +119,8 @@ LS_ResetSystemFuncs(void)
 int32_t
 LS_UpdateSystemLogger(const LS_SystemLogger_t logger)
 {
+  /* First call initialization: no mutex needed (breaks circular dependency)
+   * Mutex will be created after logger is stored for subsequent calls */
   if (sSystemLogger == NULL)
   {
     sSystemLogger = (LS_SystemLogger_t*)SYS_MALLOC(sizeof(LS_SystemLogger_t));
@@ -80,9 +129,32 @@ LS_UpdateSystemLogger(const LS_SystemLogger_t logger)
     {
       return LS_ERROR_SYSTEM_ERROR;
     }
+
+    SYS_MEMCPY((void*)(sSystemLogger), (void*)&logger, sizeof(logger));
+
+    /* Now that logger is stored, create mutex for subsequent calls */
+    if (LS_OK != LS_MutexCreate(&sSystemLoggerMutex))
+    {
+      /* Continue without mutex protection rather than fail */
+      LS_WARNING("Failed to create system logger mutex, continuing without protection\n");
+    }
+
+    return LS_OK;
   }
 
-  SYS_MEMCPY((void*)(sSystemLogger), (void*)&logger, sizeof(logger));
+  /* Subsequent calls: use mutex for thread-safe updates */
+  if (sSystemLoggerMutex != NULL)
+  {
+    LS_MutexWait(sSystemLoggerMutex);
+    SYS_MEMCPY((void*)(sSystemLogger), (void*)&logger, sizeof(logger));
+    LS_MutexSignal(sSystemLoggerMutex);
+  }
+  else
+  {
+    /* Fallback: no mutex protection */
+    SYS_MEMCPY((void*)(sSystemLogger), (void*)&logger, sizeof(logger));
+  }
+
   return LS_OK;
 }
 
@@ -90,6 +162,11 @@ LS_UpdateSystemLogger(const LS_SystemLogger_t logger)
 LS_SystemLogger_t*
 LS_GetSystemLogger(void)
 {
+  /* No mutex protection needed:
+   * 1. Read-only operation (just returning a pointer)
+   * 2. Called by logging functions internally
+   * 3. Pointer read is atomic on supported platforms
+   */
   return sSystemLogger;
 }
 
@@ -97,11 +174,48 @@ LS_GetSystemLogger(void)
 void
 LS_ResetSystemLogger(void)
 {
-  if (sSystemLogger)
+  if (sSystemLoggerMutex != NULL)
   {
-    SYS_MEMSET((void*)sSystemLogger, 0, sizeof(*sSystemLogger));
-    SYS_FREE((void*)sSystemLogger);
-    sSystemLogger = NULL;
+    LS_MutexWait(sSystemLoggerMutex);
+    if (sSystemLogger)
+    {
+      SYS_MEMSET((void*)sSystemLogger, 0, sizeof(*sSystemLogger));
+      SYS_FREE((void*)sSystemLogger);
+      sSystemLogger = NULL;
+    }
+    LS_MutexSignal(sSystemLoggerMutex);
+  }
+  else
+  {
+    /* No mutex yet (during first initialization) */
+    if (sSystemLogger)
+    {
+      SYS_MEMSET((void*)sSystemLogger, 0, sizeof(*sSystemLogger));
+      SYS_FREE((void*)sSystemLogger);
+      sSystemLogger = NULL;
+    }
+  }
+}
+
+
+/*-----------------------------------------------------------------------------
+ * Cleanup function for system port resources
+ *---------------------------------------------------------------------------*/
+void
+LS_FinalizeSystemPort(void)
+{
+  /* Clean up system funcs mutex */
+  if (sSystemFuncsMutex != NULL)
+  {
+    LS_MutexDelete(sSystemFuncsMutex);
+    sSystemFuncsMutex = NULL;
+  }
+
+  /* Clean up system logger mutex */
+  if (sSystemLoggerMutex != NULL)
+  {
+    LS_MutexDelete(sSystemLoggerMutex);
+    sSystemLoggerMutex = NULL;
   }
 }
 

@@ -128,6 +128,14 @@ LS_SystemLogger_t* LS_GetSystemLogger(void);
  */
 void LS_ResetSystemLogger(void);
 
+/**
+ * @brief Finalize system port resources
+ *
+ * Cleans up mutexes and other resources used by the system port layer.
+ * Should be called during library shutdown.
+ */
+void LS_FinalizeSystemPort(void);
+
 
 #ifdef __cplusplus
 }

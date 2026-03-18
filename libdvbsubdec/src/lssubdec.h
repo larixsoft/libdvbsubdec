@@ -36,6 +36,32 @@
  * - Configurable memory management
  * - Support for display definition segments (DDS)
  *
+ * @section Thread Safety
+ *
+ * This library is thread-safe with the following guarantees:
+ *
+ * - Different service instances can be used concurrently from multiple threads
+ * - Each service instance has its own mutex for internal state protection
+ * - System functions are protected by global mutexes
+ * - Memory heaps are protected by per-heap mutexes
+ *
+ * @subsection Thread Safety Rules
+ *
+ * 1. Multiple threads MAY:
+ *    - Create/delete different service instances concurrently
+ *    - Call LS_DVBSubDecService*() functions on different service instances
+ *    - Read configuration from the same service
+ *
+ * 2. Multiple threads MUST NOT:
+ *    - Call LS_DVBSubDecServiceDelete() while other operations on the same service
+ *    - Call LS_DVBSubDecFinalize() while any service is active
+ *
+ * 3. Callback thread safety:
+ *    - Callbacks (drawPixmapFunc, cleanRegionFunc, etc.) are invoked with
+ *      service mutex held, so they MUST NOT call back into the library
+ *      to avoid deadlock
+ *    - Callbacks should be non-blocking to avoid holding locks for extended periods
+ *
  * @note This library requires initialization before use and cleanup after use.
  */
 
