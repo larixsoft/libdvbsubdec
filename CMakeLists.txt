@@ -16,6 +16,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Compiler options
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     add_compile_options(-Wall -Wextra -Wpedantic)
+    # Suppress GNU extension warnings for variadic macros (works on both GCC and Clang)
+    add_compile_options(-Wno-gnu-zero-variadic-macro-arguments)
 endif()
 
 # Options for building components

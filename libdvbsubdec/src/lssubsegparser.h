@@ -23,6 +23,17 @@
  *
  * This header provides functions for parsing DVB subtitle segments
  * according to ETSI EN 300 743 standard.
+ *
+ * @note API BREAKING CHANGES (v1.0.0):
+ * All parsing functions now require a buffer_size parameter for security:
+ * - SegmentParseHeader(uint8_t* data, uint32_t buffer_size, LS_SegHeader* header)
+ * - SegmentParsePCS(service, data, buffer_size, pcs)
+ * - SegmentParseRCS(service, data, buffer_size, rcs)
+ * - SegmentParseCDS(service, data, buffer_size, cds)
+ * - SegmentParseODS(service, data, buffer_size, ods)
+ * - SegmentParseDDS(service, data, buffer_size, dds)
+ * - SegmentParseEDS(service, data, buffer_size, eds)
+ * - SegmentParseDSS(service, data, buffer_size, dss)
  */
 
 #ifndef __LS_SEG_PARSCER_H__
@@ -48,95 +59,130 @@ extern "C" {
  *
  * Parses the common header of all DVB subtitle segments.
  *
- * @param data Segment data buffer
- * @param header Pointer to receive parsed header
- * @return LS_OK (1) on success, error code on failure
+ * @param data Segment data buffer (must not be NULL)
+ * @param buffer_size Size of the data buffer in bytes (must be >= kSEGMENT_HEADER_SIZE)
+ * @param header Pointer to receive parsed header (must not be NULL)
+ * @return LS_OK (1) on success, LS_ERROR_GENERAL on NULL pointers,
+ *         LS_ERROR_STREAM_DATA if buffer_size is insufficient
+ *
+ * @note SECURITY: buffer_size parameter prevents buffer overflow vulnerabilities
+ * @note Minimum required buffer_size: 6 bytes (kSEGMENT_HEADER_SIZE)
  */
-int32_t SegmentParseHeader(uint8_t* data, LS_SegHeader* header);
+int32_t SegmentParseHeader(uint8_t* data, uint32_t buffer_size, LS_SegHeader* header);
 
 /**
  * @brief Parse PCS segment
  *
  * Parses a Page Composition Segment.
  *
- * @param service Service instance
- * @param data Segment data buffer
- * @param pcs Pointer to receive parsed PCS
+ * @param service Service instance (may be NULL if not allocating memory)
+ * @param data Segment data buffer (must not be NULL)
+ * @param buffer_size Size of the data buffer in bytes
+ * @param pcs Pointer to receive parsed PCS (must not be NULL)
  * @return LS_OK (1) on success, error code on failure
+ *
+ * @note SECURITY: buffer_size parameter prevents buffer overflow vulnerabilities
+ * @note Buffer should contain segment data AFTER the segment header
+ * @note service parameter is required if PCS contains regions that need allocation
  */
-int32_t SegmentParsePCS(LS_Service* service, uint8_t* data, LS_SegPCS* pcs);
+int32_t SegmentParsePCS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_SegPCS* pcs);
 
 /**
  * @brief Parse RCS segment
  *
  * Parses a Region Composition Segment.
  *
- * @param service Service instance
- * @param data Segment data buffer
- * @param rcs Pointer to receive parsed RCS
+ * @param service Service instance (may be NULL if not allocating memory)
+ * @param data Segment data buffer (must not be NULL)
+ * @param buffer_size Size of the data buffer in bytes
+ * @param rcs Pointer to receive parsed RCS (must not be NULL)
  * @return LS_OK (1) on success, error code on failure
+ *
+ * @note SECURITY: buffer_size parameter prevents buffer overflow vulnerabilities
+ * @note Buffer should contain segment data AFTER the segment header
  */
-int32_t SegmentParseRCS(LS_Service* service, uint8_t* data, LS_SegRCS* rcs);
+int32_t SegmentParseRCS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_SegRCS* rcs);
 
 /**
  * @brief Parse CDS segment
  *
  * Parses a CLUT Definition Segment.
  *
- * @param service Service instance
- * @param data Segment data buffer
- * @param cds Pointer to receive parsed CDS
+ * @param service Service instance (may be NULL if not allocating memory)
+ * @param data Segment data buffer (must not be NULL)
+ * @param buffer_size Size of the data buffer in bytes
+ * @param cds Pointer to receive parsed CDS (must not be NULL)
  * @return LS_OK (1) on success, error code on failure
+ *
+ * @note SECURITY: buffer_size parameter prevents buffer overflow vulnerabilities
+ * @note Buffer should contain segment data AFTER the segment header
  */
-int32_t SegmentParseCDS(LS_Service* service, uint8_t* data, LS_SegCDS* cds);
+int32_t SegmentParseCDS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_SegCDS* cds);
 
 /**
  * @brief Parse ODS segment
  *
  * Parses an Object Data Segment.
  *
- * @param service Service instance
- * @param data Segment data buffer
- * @param ods Pointer to receive parsed ODS
+ * @param service Service instance (may be NULL if not allocating memory)
+ * @param data Segment data buffer (must not be NULL)
+ * @param buffer_size Size of the data buffer in bytes
+ * @param ods Pointer to receive parsed ODS (must not be NULL)
  * @return LS_OK (1) on success, error code on failure
+ *
+ * @note SECURITY: buffer_size parameter prevents buffer overflow vulnerabilities
+ * @note Buffer should contain segment data AFTER the segment header
+ * @note ODS contains pixel data that requires memory allocation
  */
-int32_t SegmentParseODS(LS_Service* service, uint8_t* data, LS_SegODS* ods);
+int32_t SegmentParseODS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_SegODS* ods);
 
 /**
  * @brief Parse DDS segment
  *
  * Parses a Display Definition Segment.
  *
- * @param service Service instance
- * @param data Segment data buffer
- * @param dds Pointer to receive parsed DDS
+ * @param service Service instance (unused, may be NULL)
+ * @param data Segment data buffer (must not be NULL)
+ * @param buffer_size Size of the data buffer in bytes
+ * @param dds Pointer to receive parsed DDS (must not be NULL)
  * @return LS_OK (1) on success, error code on failure
+ *
+ * @note SECURITY: buffer_size parameter prevents buffer overflow vulnerabilities
+ * @note Buffer should contain segment data AFTER the segment header
  */
-int32_t SegmentParseDDS(LS_Service* service, uint8_t* data, LS_SegDDS* dds);
+int32_t SegmentParseDDS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_SegDDS* dds);
 
 /**
  * @brief Parse EDS segment
  *
  * Parses an End of Display Set Segment.
  *
- * @param service Service instance
- * @param data Segment data buffer
- * @param eds Pointer to receive parsed EDS
+ * @param service Service instance (unused, may be NULL)
+ * @param data Segment data buffer (must not be NULL)
+ * @param buffer_size Size of the data buffer in bytes
+ * @param eds Pointer to receive parsed EDS (must not be NULL)
  * @return LS_OK (1) on success, error code on failure
+ *
+ * @note SECURITY: buffer_size parameter prevents buffer overflow vulnerabilities
+ * @note Buffer should contain segment data AFTER the segment header
  */
-int32_t SegmentParseEDS(LS_Service* service, uint8_t* data, LS_SegEDS* eds);
+int32_t SegmentParseEDS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_SegEDS* eds);
 
 /**
  * @brief Parse DSS segment
  *
  * Parses a Disparity Signalling Segment.
  *
- * @param service Service instance
- * @param data Segment data buffer
- * @param dss Pointer to receive parsed DSS
+ * @param service Service instance (unused, may be NULL)
+ * @param data Segment data buffer (must not be NULL)
+ * @param buffer_size Size of the data buffer in bytes
+ * @param dss Pointer to receive parsed DSS (must not be NULL)
  * @return LS_OK (1) on success, error code on failure
+ *
+ * @note SECURITY: buffer_size parameter prevents buffer overflow vulnerabilities
+ * @note Buffer should contain segment data AFTER the segment header
  */
-int32_t SegmentParseDSS(LS_Service* service, uint8_t* data, LS_SegDSS* dss);
+int32_t SegmentParseDSS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_SegDSS* dss);
 
 /**
  * @brief Create new PCS structure

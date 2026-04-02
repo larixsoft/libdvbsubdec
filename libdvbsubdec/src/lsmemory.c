@@ -139,7 +139,26 @@ LS_MemInit(LS_MemHeap* * heap, uint32_t heap_size)
 #endif
 
 #ifdef LS_INTERNAL_HEAP
+    /* Check for integer overflow in heap_units calculation */
+    if (heap_size > UINT32_MAX - LS_MEM_NODE_SIZE + 1)
+    {
+      LS_ERROR("Error: heap_size %u would cause integer overflow\n", heap_size);
+      SYS_FREE((*heap));
+      *heap = NULL;
+      ret_val = LS_ERROR_GENERAL;
+      break;
+    }
     (*heap)->heap_units = (heap_size + LS_MEM_NODE_SIZE - 1) / LS_MEM_NODE_SIZE;
+
+    /* Check for integer overflow in memory allocation */
+    if ((*heap)->heap_units > UINT32_MAX / LS_MEM_NODE_SIZE)
+    {
+      LS_ERROR("Error: heap_units %u would cause integer overflow in allocation\n", (*heap)->heap_units);
+      SYS_FREE((*heap));
+      *heap = NULL;
+      ret_val = LS_ERROR_GENERAL;
+      break;
+    }
 #else
     (*heap)->heap_units = heap_size;
 #endif
@@ -254,6 +273,14 @@ LS_Malloc(LS_MemHeap* heap, uint32_t bytes)
 
     if (bytes == 0)
     {
+      ret_val = NULL;
+      break;
+    }
+
+    /* Check for integer overflow before calculating request size */
+    if (bytes > UINT32_MAX - LS_MEM_NODE_SIZE + 1)
+    {
+      LS_ERROR("Error: allocation size %u would cause integer overflow\n", bytes);
       ret_val = NULL;
       break;
     }
@@ -791,6 +818,13 @@ __heap_malloc(LS_MemHeap* heap, uint32_t bytes)
      * we need extra one unit of LS_MemNode to save the memory information,
      * also we need align the address of LS_MemNode
      *----------------------------------------------------------------------*/
+    /* Check for integer overflow before calculating request size */
+    if (bytes > UINT32_MAX - LS_MEM_NODE_SIZE + 1)
+    {
+      LS_ERROR("Error: allocation size %u would cause integer overflow\n", bytes);
+      break;
+    }
+
     request = 1 + (bytes + LS_MEM_NODE_SIZE - 1) / LS_MEM_NODE_SIZE;
     LS_TRACE("Requested bytes %d was rounded to %d (%d units)\n", bytes, request * LS_MEM_NODE_SIZE, request);
 
@@ -1385,7 +1419,7 @@ typedef struct
 static void*
 __heap_malloc(LS_MemHeap* heap, uint32_t bytes)
 {
-  LS_MemHeader* record;
+  LS_MemHeader* record = NULL;
   uint32_t request;
   uint32_t cond = 1;
 

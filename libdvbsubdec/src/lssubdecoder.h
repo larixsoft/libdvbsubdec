@@ -198,6 +198,7 @@ struct _LS_Service
   LS_MemHeap*        codedDataBufferHeap;     /**< Coded data buffer heap           */
   LS_MemHeap*        pixelBufferHeap;         /**< Pixel buffer heap                */
   LS_MemHeap*        compositionBufferHeap;   /**< Composition buffer heap          */
+  int32_t            callbackDepth;           /**< Callback reentrancy depth        */
 };
 
 

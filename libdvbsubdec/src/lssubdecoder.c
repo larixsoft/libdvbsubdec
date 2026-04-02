@@ -264,7 +264,7 @@ parseSegments(LS_Service* service, uint8_t* data, int32_t size, LS_Displayset* d
       break;
     }
 
-    SegmentParseHeader(data, &header);
+    SegmentParseHeader(data, size - read, &header);
 
     if (read + header.segment_length + kSEGMENT_DATA_FIELD_OFFSET > size)
     {
@@ -295,7 +295,7 @@ parseSegments(LS_Service* service, uint8_t* data, int32_t size, LS_Displayset* d
 
         SYS_MEMCPY((void*)pcs, (void*)(&header), kSEGMENT_DATA_FIELD_OFFSET);
         /*move the data to the segment_data_field*/
-        res = SegmentParsePCS(service, data + kSEGMENT_DATA_FIELD_OFFSET, pcs);
+        res = SegmentParsePCS(service, data + kSEGMENT_DATA_FIELD_OFFSET, size - read - kSEGMENT_DATA_FIELD_OFFSET, pcs);
 
         if (res == LS_ERROR_GENERAL)
         {
@@ -326,7 +326,7 @@ parseSegments(LS_Service* service, uint8_t* data, int32_t size, LS_Displayset* d
         }
 
         SYS_MEMCPY((void*)rcs, (void*)(&header), kSEGMENT_DATA_FIELD_OFFSET);
-        res = SegmentParseRCS(service, data + kSEGMENT_DATA_FIELD_OFFSET, rcs);
+        res = SegmentParseRCS(service, data + kSEGMENT_DATA_FIELD_OFFSET, size - read - kSEGMENT_DATA_FIELD_OFFSET, rcs);
 
         if (res == LS_ERROR_GENERAL)
         {
@@ -357,7 +357,7 @@ parseSegments(LS_Service* service, uint8_t* data, int32_t size, LS_Displayset* d
         }
 
         SYS_MEMCPY((void*)cds, (void*)&header, kSEGMENT_DATA_FIELD_OFFSET);
-        res = SegmentParseCDS(service, data + kSEGMENT_DATA_FIELD_OFFSET, cds);
+        res = SegmentParseCDS(service, data + kSEGMENT_DATA_FIELD_OFFSET, size - read - kSEGMENT_DATA_FIELD_OFFSET, cds);
 
         if (res == LS_ERROR_GENERAL)
         {
@@ -388,7 +388,7 @@ parseSegments(LS_Service* service, uint8_t* data, int32_t size, LS_Displayset* d
         }
 
         SYS_MEMCPY((void*)ods, (void*)&header, kSEGMENT_DATA_FIELD_OFFSET);
-        res = SegmentParseODS(service, data + kSEGMENT_DATA_FIELD_OFFSET, ods);
+        res = SegmentParseODS(service, data + kSEGMENT_DATA_FIELD_OFFSET, size - read - kSEGMENT_DATA_FIELD_OFFSET, ods);
 
         if (res == LS_ERROR_GENERAL)
         {
@@ -419,7 +419,7 @@ parseSegments(LS_Service* service, uint8_t* data, int32_t size, LS_Displayset* d
         }
 
         SYS_MEMCPY((void*)dds, (void*)&header, kSEGMENT_DATA_FIELD_OFFSET);
-        res = SegmentParseDDS(service, data + kSEGMENT_DATA_FIELD_OFFSET, dds);
+        res = SegmentParseDDS(service, data + kSEGMENT_DATA_FIELD_OFFSET, size - read - kSEGMENT_DATA_FIELD_OFFSET, dds);
 
         if (res == LS_ERROR_GENERAL)
         {
@@ -443,7 +443,7 @@ parseSegments(LS_Service* service, uint8_t* data, int32_t size, LS_Displayset* d
         if (eds)
         {
           SYS_MEMCPY((void*)eds, (void*)&header, kSEGMENT_DATA_FIELD_OFFSET);
-          res = SegmentParseEDS(service, data + kSEGMENT_DATA_FIELD_OFFSET, eds);
+          res = SegmentParseEDS(service, data + kSEGMENT_DATA_FIELD_OFFSET, size - read - kSEGMENT_DATA_FIELD_OFFSET, eds);
           SegmentDumpEDS(eds);
           displayset->eds = eds;
         }
@@ -1651,9 +1651,22 @@ ServiceSystemHeap(void)
   {
     if (gDecoderFactory != NULL)
     {
-      LS_MutexWait(gDecoderFactory->mutex);
+      int32_t mutex_status;
+      mutex_status = LS_MutexWait(gDecoderFactory->mutex);
+      if (mutex_status != LS_OK)
+      {
+        LS_ERROR("Failed to acquire mutex: %d\n", mutex_status);
+        ret_val = LS_ERROR_SYSTEM_ERROR;
+        break;
+      }
       systemHeap = gDecoderFactory->systemHeap;
-      LS_MutexSignal(gDecoderFactory->mutex);
+      mutex_status = LS_MutexSignal(gDecoderFactory->mutex);
+      if (mutex_status != LS_OK)
+      {
+        LS_ERROR("Failed to release mutex: %d\n", mutex_status);
+        ret_val = LS_ERROR_SYSTEM_ERROR;
+        break;
+      }
     }
     else
     {
@@ -1742,10 +1755,21 @@ ServiceFactoryFinalize(void)
     return LS_OK;
   }
 
-  LS_MutexWait(gDecoderFactory->mutex);
+  int32_t mutex_status;
+  mutex_status = LS_MutexWait(gDecoderFactory->mutex);
+  if (mutex_status != LS_OK)
+  {
+    LS_ERROR("Failed to acquire mutex in ServiceFactoryFinalize: %d\n", mutex_status);
+    return LS_ERROR_SYSTEM_ERROR;
+  }
   gDecoderFactory->referenceCount -= 1;
   ref_count = gDecoderFactory->referenceCount;
-  LS_MutexSignal(gDecoderFactory->mutex);
+  mutex_status = LS_MutexSignal(gDecoderFactory->mutex);
+  if (mutex_status != LS_OK)
+  {
+    LS_ERROR("Failed to release mutex in ServiceFactoryFinalize: %d\n", mutex_status);
+    return LS_ERROR_SYSTEM_ERROR;
+  }
 
   if (ref_count <= 0)
   {
@@ -1929,18 +1953,50 @@ ServicePTSNotificationCB(const uint64_t ptsValue, PTSReason reason, void* user_d
     return;
   }
 
-  LS_MutexWait(service->serviceMutex);
+  int32_t mutex_status;
+  mutex_status = LS_MutexWait(service->serviceMutex);
+  if (mutex_status != LS_OK)
+  {
+    LS_ERROR("Failed to acquire service mutex: %d\n", mutex_status);
+    return;
+  }
+
+  /* Callback reentrancy guard - detect recursive callbacks */
+  if (service->callbackDepth > 1)
+  {
+    LS_ERROR("CALLBACK REENTRANCY WARNING in PTS notification: callbackDepth=%d\n",
+             service->callbackDepth);
+    LS_ERROR("PTS callback is calling back into the library - this can cause deadlock!\n");
+  }
+  service->callbackDepth++;
+
   LS_DEBUG("(PTS:%llu,0x%08llx,%s) fired,reason = %d\n", ptsValue, ptsValue, PTStoHMS(ptsValue), reason);
   res = ptsCommandHandler(service, ptsValue, reason, NULL);
 
   if (res != LS_OK)
   {
     LS_ERROR("Cannot signal service %p to process fired PTS\n", (void*)service);
+
+    /* CRITICAL: Must decrement callback depth before returning */
+    service->callbackDepth--;
+
+    /* CRITICAL: Must release mutex before returning to avoid deadlock */
+    mutex_status = LS_MutexSignal(service->serviceMutex);
+    if (mutex_status != LS_OK)
+    {
+      LS_ERROR("Failed to release service mutex after error: %d\n", mutex_status);
+    }
     return;
   }
 
   LS_INFO("(PTS:%llu,0x%08llx,%s) was processed\n", ptsValue, ptsValue, PTStoHMS(ptsValue));
-  LS_MutexSignal(service->serviceMutex);
+  service->callbackDepth--;
+
+  mutex_status = LS_MutexSignal(service->serviceMutex);
+  if (mutex_status != LS_OK)
+  {
+    LS_ERROR("Failed to release service mutex: %d\n", mutex_status);
+  }
   return;
 }
 

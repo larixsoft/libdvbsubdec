@@ -664,7 +664,6 @@ pes_feeding_thread(void* param)
 
   /* Find and enqueue all PES packets */
   size_t pos = 0;
-  int packet_count = 0;
 
   while (pos < player->pes_size &&
          !player->feed_complete)
@@ -693,11 +692,7 @@ pes_feeding_thread(void* param)
         (stream_id == 0xBE))
     {
       /* Enqueue packet */
-      if (pes_queue_enqueue(player->pes_queue, player->pes_buffer + packet_start, packet_size))
-      {
-        packet_count++;
-      }
-      else
+      if (!pes_queue_enqueue(player->pes_queue, player->pes_buffer + packet_start, packet_size))
       {
         break;         /* Queue shutdown or error */
       }

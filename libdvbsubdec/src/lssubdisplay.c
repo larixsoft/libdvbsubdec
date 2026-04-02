@@ -426,6 +426,16 @@ LS_DisplayPageOnScreen(LS_DisplayPage* page)
                    region->pixmap->leftPos + region->pixmap->width,
                    region->pixmap->topPos + region->pixmap->height);
           drawPixmapFunc = service->osdRender.drawPixmapFunc;
+
+          /* Callback reentrancy guard - detect recursive callbacks */
+          if (service->callbackDepth > 1)
+          {
+            LS_ERROR("CALLBACK REENTRANCY WARNING in drawPixmapFunc: callbackDepth=%d\n",
+                     service->callbackDepth);
+            LS_ERROR("User callback is calling back into the library - this can cause deadlock!\n");
+          }
+          service->callbackDepth++;
+
           LS_DEBUG("call drawPixmapFunc to draw subtitle on screen...\n");
           // Pass the region's CLUT to the draw function for proper color/alpha rendering
           // The CLUT has already been transformed by initRegionWithDefaultCLUT if needed
@@ -433,6 +443,8 @@ LS_DisplayPageOnScreen(LS_DisplayPage* page)
                          (const uint8_t*)region->clut,          // Pass CLUT palette
                          0,
                          service->osdRender.drawPixmapFuncData);
+
+          service->callbackDepth--;
 
           if (pixmap != region->pixmap)
           {
@@ -543,7 +555,18 @@ LS_RemovePageFromScreen(LS_DisplayPage* page)
 
         if (clean_region_cb)
         {
+          /* Callback reentrancy guard - detect recursive callbacks */
+          if (service->callbackDepth > 1)
+          {
+            LS_ERROR("CALLBACK REENTRANCY WARNING in cleanRegionFunc: callbackDepth=%d\n",
+                     service->callbackDepth);
+            LS_ERROR("User callback is calling back into the library - this can cause deadlock!\n");
+          }
+          service->callbackDepth++;
+
           clean_region_cb(fill_rect, clean_region_cb_data);
+
+          service->callbackDepth--;
         }
         else if (drawPixmapFunc &&
                  region->pixmap)
@@ -564,7 +587,18 @@ LS_RemovePageFromScreen(LS_DisplayPage* page)
                      region->pixmap->topPos,
                      region->pixmap->leftPos + region->pixmap->width,
                      region->pixmap->topPos + region->pixmap->height);
+            /* Callback reentrancy guard - detect recursive callbacks */
+            if (service->callbackDepth > 1)
+            {
+              LS_ERROR("CALLBACK REENTRANCY WARNING in drawPixmapFunc (fill): callbackDepth=%d\n",
+                       service->callbackDepth);
+              LS_ERROR("User callback is calling back into the library - this can cause deadlock!\n");
+            }
+            service->callbackDepth++;
+
             drawPixmapFunc(fill_pixmap, NULL, 0, cb_draw_data);
+
+            service->callbackDepth--;
             LS_DeletePixmap(service, fill_pixmap);
           }
         }

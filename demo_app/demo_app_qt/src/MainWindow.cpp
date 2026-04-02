@@ -1019,19 +1019,7 @@ MainWindow::drawPixmapCallback(const LS_Pixmap_t* pixmap,
   }
 
   // Track rendering state for subtitle counting
-  static int regionCount = 0;
   static bool firstSubtitleDrawn = false;
-  static QElapsedTimer startTime;
-
-  if (!startTime.isValid())
-  {
-    startTime.start();
-  }
-
-  regionCount++;
-
-  // Get elapsed time in milliseconds (for debugging)
-  (void)startTime.elapsed();
 
   // Handle first subtitle (no cleanRegionCallback is called for it)
   if (!firstSubtitleDrawn)

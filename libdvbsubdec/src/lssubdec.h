@@ -417,10 +417,18 @@ struct _LS_ServiceMemCfg
  *
  * Provides callbacks for system-level operations like mutex and timer management.
  * These allow the decoder to be portable across different platforms.
+ *
+ * @note IMPORTANT: Thread Safety Requirements
+ *   - mutexCreateFunc MUST create mutexes with priority inheritance (PTHREAD_PRIO_INHERIT)
+ *     to prevent priority inversion in real-time environments
+ *   - On Linux/Unix systems using pthread, use pthread_mutexattr_setprotocol with
+ *     PTHREAD_PRIO_INHERIT when creating mutexes
+ *   - All mutex operations MUST check return values and handle errors appropriately
+ *   - NEVER continue after mutex lock failure - this indicates a serious system error
  */
 struct _LS_SystemFuncs
 {
-  int32_t (*mutexCreateFunc)(LS_Mutex_t* mutex_id);                                                   /**< Callback to create a mutex             */
+  int32_t (*mutexCreateFunc)(LS_Mutex_t* mutex_id);                                                   /**< Callback to create a mutex (MUST use priority inheritance)             */
   int32_t (*mutexDeleteFunc)(LS_Mutex_t mutex_id);                                                    /**< Callback to delete a mutex             */
   int32_t (*mutexWaitFunc)(LS_Mutex_t mutex_id);                                                      /**< Callback to wait/acquire a mutex       */
   int32_t (*mutexSignalFunc)(LS_Mutex_t mutex_id);                                                    /**< Callback to signal/release a mutex     */

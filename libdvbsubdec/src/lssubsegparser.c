@@ -523,17 +523,24 @@ ___deleteDSSDivisionPeriod(void* data, void* user_data)
  * API prototype
  *--------------------------------------------------------------------------*/
 int32_t
-SegmentParseHeader(uint8_t* data, LS_SegHeader* header)
+SegmentParseHeader(uint8_t* data, uint32_t buffer_size, LS_SegHeader* header)
 {
   int32_t status = LS_OK;
 
-  LS_ENTER("data=%p,header=%p\n", (void*)data, (void*)header);
+  LS_ENTER("data=%p,buffer_size=%u,header=%p\n", (void*)data, (void*)header);
 
   if ((data == NULL) ||
       (header == NULL))
   {
-    LS_ERROR("Invalid input arguments: data=%p,header=%p\n", (void*)data, (void*)header);
+    LS_ERROR("Invalid input arguments: data=%p,buffer_size=%u,header=%p\n", (void*)data, (void*)header);
     return LS_ERROR_GENERAL;
+  }
+
+  /* Validate buffer size - need at least 6 bytes for segment header */
+  if (buffer_size < 6)
+  {
+    LS_ERROR("Buffer too small: need at least 6 bytes, got %u\n", buffer_size);
+    return LS_ERROR_STREAM_DATA;
   }
 
   header->sync_byte = ReadBitStream32(data, 0, 0, 8, &status);
@@ -618,18 +625,35 @@ SegmentDeletePCS(LS_Service* service, LS_SegPCS* pcs)
 
 
 int32_t
-SegmentParsePCS(LS_Service* service, uint8_t* data, LS_SegPCS* pcs)
+SegmentParsePCS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_SegPCS* pcs)
 {
   int32_t status = LS_OK;
   int32_t processed_length = 0;
 
-  LS_ENTER("data=%p,pcs=%p\n", (void*)data, (void*)pcs);
+  LS_ENTER("service=%p,data=%p,buffer_size=%u,pcs=%p\n",
+            (void*)service, (void*)data, buffer_size, (void*)pcs);
 
-  if ((data == NULL) ||
+  /* Validate all input parameters first */
+  if ((service == NULL) ||
+      (data == NULL) ||
       (pcs == NULL))
   {
+    LS_ERROR("Invalid input arguments: service=%p,data=%p,buffer_size=%u,pcs=%p\n",
+             (void*)service, (void*)data, buffer_size, (void*)pcs);
     LS_LEAVE("\n");
     return LS_ERROR_GENERAL;
+  }
+
+  /* Validate buffer size - PCS needs at least 2 bytes for basic fields */
+  if (buffer_size < 2) {
+    LS_ERROR("Buffer too small for PCS segment, got %u bytes (need at least 2)\n", buffer_size);
+    return LS_ERROR_STREAM_DATA;
+  }
+
+  /* Validate segment_length doesn't exceed buffer size */
+  if (pcs->segment_length > buffer_size) {
+    LS_ERROR("Segment length (%u) exceeds buffer size (%u)\n", pcs->segment_length, buffer_size);
+    return LS_ERROR_STREAM_DATA;
   }
 
   pcs->page_time_out = ReadBitStream32(data, 0, 0, 8, &status);
@@ -779,17 +803,36 @@ SegmentDeleteRCS(LS_Service* service, LS_SegRCS* rcs)
 
 
 int32_t
-SegmentParseRCS(LS_Service* service, uint8_t* data, LS_SegRCS* rcs)
+SegmentParseRCS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_SegRCS* rcs)
 {
   int32_t status = LS_OK;
   int32_t processed_length;
   RCSObjectInfo* object = NULL;
 
-  if ((data == NULL) ||
+  LS_ENTER("service=%p,data=%p,buffer_size=%u,rcs=%p\n",
+           (void*)service, (void*)data, buffer_size, (void*)rcs);
+
+  /* Validate all input parameters first */
+  if ((service == NULL) ||
+      (data == NULL) ||
       (rcs == NULL))
   {
-    LS_ERROR("LS_ERROR_GENERAL: Invalid input parameters:data=%p,rcs=%p\n", (void*)data, (void*)rcs);
+    LS_ERROR("Invalid input arguments: service=%p,data=%p,buffer_size=%u,rcs=%p\n",
+             (void*)service, (void*)data, buffer_size, (void*)rcs);
+    LS_LEAVE("\n");
     return LS_ERROR_GENERAL;
+  }
+
+  /* Validate buffer size - RCS needs at least 10 bytes for basic fields */
+  if (buffer_size < 10) {
+    LS_ERROR("Buffer too small for RCS segment, got %u bytes (need at least 10)\n", buffer_size);
+    return LS_ERROR_STREAM_DATA;
+  }
+
+  /* Validate segment_length doesn't exceed buffer size */
+  if (rcs->segment_length > buffer_size) {
+    LS_ERROR("Segment length (%u) exceeds buffer size (%u)\n", rcs->segment_length, buffer_size);
+    return LS_ERROR_STREAM_DATA;
   }
 
   rcs->region_id = ReadBitStream32(data, 0, 0, 8, &status);
@@ -977,16 +1020,35 @@ SegmentDeleteCDS(LS_Service* service, LS_SegCDS* cds)
 
 
 int32_t
-SegmentParseCDS(LS_Service* service, uint8_t* data, LS_SegCDS* cds)
+SegmentParseCDS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_SegCDS* cds)
 {
   int32_t status = LS_OK;
   int32_t processed_length;
 
-  if ((data == NULL) ||
+  LS_ENTER("service=%p,data=%p,buffer_size=%u,cds=%p\n",
+           (void*)service, (void*)data, buffer_size, (void*)cds);
+
+  /* Validate all input parameters first */
+  if ((service == NULL) ||
+      (data == NULL) ||
       (cds == NULL))
   {
-    LS_ERROR("LS_ERROR_GENERAL: Invalid input parameters\n");
+    LS_ERROR("Invalid input arguments: service=%p,data=%p,buffer_size=%u,cds=%p\n",
+             (void*)service, (void*)data, buffer_size, (void*)cds);
+    LS_LEAVE("\n");
     return LS_ERROR_GENERAL;
+  }
+
+  /* Validate buffer size - CDS needs at least 2 bytes for basic fields */
+  if (buffer_size < 2) {
+    LS_ERROR("Buffer too small for CDS segment, got %u bytes (need at least 2)\n", buffer_size);
+    return LS_ERROR_STREAM_DATA;
+  }
+
+  /* Validate segment_length doesn't exceed buffer size */
+  if (cds->segment_length > buffer_size) {
+    LS_ERROR("Segment length (%u) exceeds buffer size (%u)\n", cds->segment_length, buffer_size);
+    return LS_ERROR_STREAM_DATA;
   }
 
   cds->CLUT_id = ReadBitStream32(data, 0, 0, 8, &status);
@@ -1144,16 +1206,28 @@ SegmentDeleteODS(LS_Service* service, LS_SegODS* ods)
 
 
 int32_t
-SegmentParseODS(LS_Service* service, uint8_t* data, LS_SegODS* ods)
+SegmentParseODS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_SegODS* ods)
 {
   int32_t status = LS_OK;
 
+  LS_ENTER("service=%p,data=%p,buffer_size=%u,ods=%p\n",
+           (void*)service, (void*)data, buffer_size, (void*)ods);
+
+  /* Validate all input parameters first */
   if ((service == NULL) ||
       (data == NULL) ||
       (ods == NULL))
   {
-    LS_ERROR("LS_ERROR_GENERAL: Invalid input parameters\n");
+    LS_ERROR("Invalid input arguments: service=%p,data=%p,buffer_size=%u,ods=%p\n",
+             (void*)service, (void*)data, buffer_size, (void*)ods);
+    LS_LEAVE("\n");
     return LS_ERROR_GENERAL;
+  }
+
+  /* Validate buffer size - ODS needs at least 3 bytes for basic fields */
+  if (buffer_size < 3) {
+    LS_ERROR("Buffer too small for ODS segment, got %u bytes (need at least 3)\n", buffer_size);
+    return LS_ERROR_STREAM_DATA;
   }
 
   ods->object_id = ReadBitStream32(data, 0, 0, 16, &status);
@@ -1272,16 +1346,28 @@ SegmentDeleteDDS(LS_Service* service, LS_SegDDS* dds)
 
 
 int32_t
-SegmentParseDDS(LS_Service* service, uint8_t* data, LS_SegDDS* dds)
+SegmentParseDDS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_SegDDS* dds)
 {
   int32_t status = LS_OK;
   (void)service;  /* Unused */
 
+  LS_ENTER("service=%p,data=%p,buffer_size=%u,dds=%p\n",
+           (void*)service, (void*)data, buffer_size, (void*)dds);
+
+  /* Validate all input parameters first */
   if ((data == NULL) ||
       (dds == NULL))
   {
-    LS_ERROR("LS_ERROR_GENERAL: Invalid input parameters\n");
+    LS_ERROR("Invalid input arguments: service=%p,data=%p,buffer_size=%u,dds=%p\n",
+             (void*)service, (void*)data, buffer_size, (void*)dds);
+    LS_LEAVE("\n");
     return LS_ERROR_GENERAL;
+  }
+
+  /* Validate buffer size - DDS needs at least 1 byte for display_version_number */
+  if (buffer_size < 1) {
+    LS_ERROR("Buffer too small for DDS segment, got %u bytes (need at least 1)\n", buffer_size);
+    return LS_ERROR_STREAM_DATA;
   }
 
   dds->dds_version_number = ReadBitStream32(data, 0, 0, 4, &status);
@@ -1372,34 +1458,62 @@ SegmentDeleteEDS(LS_Service* service, LS_SegEDS* eds)
 
 
 int32_t
-SegmentParseEDS(LS_Service* service, uint8_t* data, LS_SegEDS* eds)
+SegmentParseEDS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_SegEDS* eds)
 {
   (void)service;  /* Not used for EDS parsing */
 
+  LS_ENTER("service=%p,data=%p,buffer_size=%u,eds=%p\n",
+           (void*)service, (void*)data, buffer_size, (void*)eds);
+
+  /* Validate all input parameters first */
   if ((data == NULL) ||
       (eds == NULL))
   {
-    LS_ERROR("LS_ERROR_GENERAL: Invalid input parameters\n");
+    LS_ERROR("Invalid input arguments: service=%p,data=%p,buffer_size=%u,eds=%p\n",
+             (void*)service, (void*)data, buffer_size, (void*)eds);
+    LS_LEAVE("\n");
     return LS_ERROR_GENERAL;
   }
 
-  /* Parse the standard segment header (first 6 bytes) */
-  eds->sync_byte = data[0];
-  eds->segment_type = data[1];
-  eds->page_id = (data[2] << 8) | data[3];
-  eds->segment_length = (data[4] << 8) | data[5];
+  /*
+   * EDS segment structure:
+   * - 6 byte header (sync, type, page_id, segment_length) - already in eds from calling code
+   * - 0-2 bytes of stuffing data - this is what 'data' points to
+   *
+   * The calling code passes data + 6 (after the header), so:
+   * data[0] is the first stuffing byte
+   * buffer_size is bytes available after the header
+   *
+   * For streaming/incomplete segments, be lenient with buffer_size
+   */
 
-  /* EDS segment has only 2 bytes of stuffing after the header */
-  if (eds->segment_length > 2)
+  /* EDS segment can have 0-2 stuffing bytes after the header
+   * The segment_length field (already in eds from header) indicates how many
+   * For streaming, we might not have all bytes - be lenient
+   */
+
+  if (buffer_size == 0 || buffer_size == 1)
   {
-    LS_WARNING("EDS segment length > 2 (got %d), extra data ignored\n", eds->segment_length);
+    /* Truncated or minimal EDS segment - use defaults for stuffing bytes */
+    LS_TRACE("EDS segment has incomplete data (%u bytes), using defaults\n", buffer_size);
+    eds->stuff[0] = (buffer_size >= 1) ? data[0] : 0xFF;
+    eds->stuff[1] = 0xFF;
+    return LS_OK;  /* Don't fail on truncated EDS - it's just an end marker */
   }
 
-  eds->stuff[0] = (eds->segment_length >= 1) ? data[6] : 0xFF;
-  eds->stuff[1] = (eds->segment_length >= 2) ? data[7] : 0xFF;
+  /* Validate buffer_size is not unexpectedly large */
+  if (buffer_size > 2)
+  {
+    LS_WARNING("EDS segment buffer_size is %u (expected 0-2), using first 2 bytes\n", buffer_size);
+  }
 
-  LS_TRACE("Parsed EDS: sync_byte=%02x, segment_type=%02x, page_id=%04x, length=%d\n",
-           eds->sync_byte, eds->segment_type, eds->page_id, eds->segment_length);
+  /* Parse stuffing bytes (typically 2 bytes, but can be 0) */
+  eds->stuff[0] = data[0];
+  eds->stuff[1] = (buffer_size >= 2) ? data[1] : 0xFF;
+
+  LS_TRACE("Parsed EDS: sync_byte=%02x, segment_type=%02x, page_id=%04x, stuff[0]=%02x, stuff[1]=%02x\n",
+           eds->sync_byte, eds->segment_type, eds->page_id,
+           eds->stuff[0], eds->stuff[1]);
 
   return LS_OK;
 }
@@ -1482,16 +1596,30 @@ SegmentDeleteDSS(LS_Service* service, LS_SegDSS* dss)
 
 
 int32_t
-SegmentParseDSS(LS_Service* service, uint8_t* data, LS_SegDSS* dss)
+SegmentParseDSS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_SegDSS* dss)
 {
   int32_t status = LS_OK;
   int32_t processed_length = 0;
   uint32_t sequencelen;
 
-  if ((data == NULL) ||
+  LS_ENTER("service=%p,data=%p,buffer_size=%u,dss=%p\n",
+           (void*)service, (void*)data, buffer_size, (void*)dss);
+
+  /* Validate all input parameters first */
+  if ((service == NULL) ||
+      (data == NULL) ||
       (dss == NULL))
   {
+    LS_ERROR("Invalid input arguments: service=%p,data=%p,buffer_size=%u,dss=%p\n",
+             (void*)service, (void*)data, buffer_size, (void*)dss);
+    LS_LEAVE("\n");
     return LS_ERROR_GENERAL;
+  }
+
+  /* Validate buffer size - DSS needs at least 2 bytes for basic fields */
+  if (buffer_size < 2) {
+    LS_ERROR("Buffer too small for DSS segment, got %u bytes (need at least 2)\n", buffer_size);
+    return LS_ERROR_STREAM_DATA;
   }
 
   dss->dss_version_number = ReadBitStream32(data, 0, 0, 4, &status);
@@ -1647,7 +1775,7 @@ CDSFindEntryByID(LS_SegCDS* cds, uint8_t entry_id)
   if ((cds == NULL) ||
       (cds->clutinfo_list == NULL))
   {
-    return LS_ERROR_GENERAL;
+    return NULL;
   }
 
   entry = LS_ListFindUserNode(cds->clutinfo_list, (void*)((intptr_t)entry_id), __CDSEntryCompareFunc);
