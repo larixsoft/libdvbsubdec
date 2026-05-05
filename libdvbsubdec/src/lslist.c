@@ -84,7 +84,10 @@ LS_ListInit(Allocator alloc_func, Deallocator free_func, int32_t* errcode)
   /*all seem OK, return ... ... */
   LS_DEBUG("list %p created\n", (void*)list);
   LS_LEAVE(",ret_val=%p\n", list);
-  *errcode = LS_OK;
+  if (list != NULL)
+  {
+    *errcode = LS_OK;
+  }
   return list;
 }
 
@@ -269,6 +272,7 @@ LS_ListPreAppend(LS_List* list, void* data)
   if (status == 0)
   {
     LS_ERROR("LS_ERROR_SYSTEM_ERROR: wait for a mutex failed\n");
+    list->deallocator(new_node);
     ret_val = LS_ERROR_SYSTEM_ERROR;
     LS_LEAVE("ret_val=%d\n", ret_val);
     return ret_val;

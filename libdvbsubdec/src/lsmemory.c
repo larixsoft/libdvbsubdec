@@ -433,7 +433,12 @@ LS_Realloc(LS_MemHeap* heap, void* ptr, uint32_t bytes)
     if (status != LS_TRUE)
     {
       LS_ERROR("LS_ERROR_SYSTEM_ERROR: signal mutex failed\n");
-      __heap_free(heap, ret_val);
+      /* Only free if allocation succeeded - if ret_val is NULL, realloc failed
+       * and the original ptr is still valid (caller's responsibility to free) */
+      if (ret_val != NULL)
+      {
+        __heap_free(heap, ret_val);
+      }
       ret_val = NULL;
       break;
     }

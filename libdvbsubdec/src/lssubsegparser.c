@@ -410,6 +410,9 @@ __SegDSSDeleteDSSRegionInfo(LS_Service* service, DSSRegionInfo* region)
 }
 
 
+/*---------------------------------------------------------------------------
+ * Parse DSS Region Info
+ *--------------------------------------------------------------------------*/
 static int32_t
 __SegDSSParseDSSRegionInfo(LS_Service* service, uint8_t* data, DSSRegionInfo* regioninfo, uint32_t* processed_length)
 {
@@ -459,6 +462,7 @@ __SegDSSParseDSSRegionInfo(LS_Service* service, uint8_t* data, DSSRegionInfo* re
       if (sequence == NULL)
       {
         LS_ERROR("cannot create a new sequence\n");
+        ServiceHeapFree(service, COMPOSITION_BUFFER, subregion);
         return LS_ERROR_GENERAL;
       }
 
@@ -472,8 +476,22 @@ __SegDSSParseDSSRegionInfo(LS_Service* service, uint8_t* data, DSSRegionInfo* re
       else
       {
         LS_ERROR("SegDSSParseDisparityShiftUpdateSequence() failed\n");
+        __segDSSDeleteDSSDisparityShiftUpdateSequence(service, sequence);
+        ServiceHeapFree(service, COMPOSITION_BUFFER, subregion);
         return LS_ERROR_GENERAL;
       }
+    }
+
+    status = LS_ListAppend(regioninfo->sub_region_info, (void*)subregion);
+    if (status != LS_OK)
+    {
+      LS_ERROR("LS_ListAppend failed for subregion\n");
+      if (subregion->disparity_shift_update_sequence)
+      {
+        __segDSSDeleteDSSDisparityShiftUpdateSequence(service, subregion->disparity_shift_update_sequence);
+      }
+      ServiceHeapFree(service, COMPOSITION_BUFFER, subregion);
+      return LS_ERROR_GENERAL;
     }
   }
 
@@ -505,7 +523,7 @@ __deleteCDSClutInfo(void* data, void* user_data)
 static void
 ___deleteDSSDivisionPeriod(void* data, void* user_data)
 {
-  LS_Service* service = NULL;
+  LS_Service* service = (LS_Service*)user_data;
 
   if ((data == NULL) ||
       (service == NULL))
@@ -513,7 +531,6 @@ ___deleteDSSDivisionPeriod(void* data, void* user_data)
     return;
   }
 
-  service = (LS_Service*)user_data;
   LS_Free(service->compositionBufferHeap, data);
   LS_DEBUG("data %p was freed from service %p COMPOSITION_BUFFER\n", data, user_data);
 }
@@ -686,6 +703,7 @@ SegmentParsePCS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_Seg
     if (status != LS_OK)
     {
       LS_ERROR("LS_ERROR_GENERAL: append region to list failed\n");
+      ServiceHeapFree(service, COMPOSITION_BUFFER, (void*)region);
       LS_LEAVE("\n");
       return LS_ERROR_GENERAL;
     }
@@ -882,6 +900,7 @@ SegmentParseRCS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_Seg
     if (status != LS_OK)
     {
       LS_ERROR("LS_ERROR_GENERAL: list append failed\n");
+      ServiceHeapFree(service, COMPOSITION_BUFFER, (void*)object);
       return LS_ERROR_GENERAL;
     }
 
@@ -1095,7 +1114,13 @@ SegmentParseCDS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_Seg
       clutinfo->T_value = ReadBitStream32(data, 2, 14, 2, &status);
     }
 
-    LS_ListAppend(cds->clutinfo_list, (void*)clutinfo);
+    status = LS_ListAppend(cds->clutinfo_list, (void*)clutinfo);
+    if (status != LS_OK)
+    {
+      LS_ERROR("LS_ERROR_GENERAL: append clut to list failed\n");
+      ServiceHeapFree(service, COMPOSITION_BUFFER, (void*)clutinfo);
+      return LS_ERROR_GENERAL;
+    }
     LS_TRACE("Add a new clutinfo %p: id=%d,Y=%d,Cr=%d,Cb=%d,T=%d to cds->clutinfo_list(%p -> %p)\n",
              (void*)clutinfo,
              clutinfo->CLUT_entry_id,
@@ -1650,6 +1675,7 @@ SegmentParseDSS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_Seg
     else
     {
       LS_ERROR("LS_ERROR_GENERAL: update sequence failed\n");
+      __segDSSDeleteDSSDisparityShiftUpdateSequence(service, sequence);
       return LS_ERROR_GENERAL;
     }
   }
@@ -1675,6 +1701,7 @@ SegmentParseDSS(LS_Service* service, uint8_t* data, uint32_t buffer_size, LS_Seg
     else
     {
       LS_ERROR("LS_ERROR_GENERAL: parse DSS region info failed\n");
+      __SegDSSDeleteDSSRegionInfo(service, regioninfo);
       return LS_ERROR_GENERAL;
     }
   }
@@ -1872,6 +1899,7 @@ LS_DisplaysetDelete(LS_Service* service, LS_Displayset* displayset)
   if (displayset->magic_id != DISPLAYSET_MAGIC_NUMBER)
   {
     LS_ERROR("displayset %p corrupted: bad magic number\n", (void*)displayset);
+    ServiceHeapFree(service, COMPOSITION_BUFFER, displayset);
     return;
   }
 

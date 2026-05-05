@@ -409,7 +409,10 @@ LS_DisplayPageNew(LS_Service* service, int32_t* errCode)
     page = NULL;
   }
 
-  page->status = LS_DISPLAYPAGE_STATUS_NEW;
+  if (page != NULL)
+  {
+    page->status = LS_DISPLAYPAGE_STATUS_NEW;
+  }
   return page;
 }
 

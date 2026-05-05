@@ -260,6 +260,7 @@ stm_pqueue_free(STMPqueue* q)
 #ifdef LS_PQ_DEBUG
     q->magic_id = 0xDEADBEEF;
 #endif
+    LS_MutexDelete(q->mutex);
     q->deallocator(q);
   }while (0);
 

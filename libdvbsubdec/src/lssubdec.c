@@ -354,16 +354,18 @@ LS_DVBSubDecServiceDelete(const LS_ServiceID_t serviceID)
     if (LS_OK != res)
     {
       LS_WARNING("WARN: ServiceFactoryUnregister(serviceID<%p> failed)\n", serviceID);
+      LS_ERROR("Cannot delete service that failed to unregister - service remains active\n");
+      LS_MutexSignal(service->serviceMutex);
       ret_val = LS_ERROR_GENERAL;
+      break;
     }
-    else
-    {
-      LS_INFO("serviceID<%p> is unregistered now\n", serviceID);
-    }
+
+    LS_INFO("serviceID<%p> is unregistered now\n", serviceID);
 
     ServiceInstanceReset(service);
     LS_INFO("serviceID<%p> is reset\n", serviceID);
     LS_PTSMgrUnRegisterClient(service->ptsmgrClientID);
+    /* Note: LS_PTSMgrUnRegisterClient returns void, so no error checking possible */
     LS_INFO("serviceID<%p> is unregistered from PTMgr\n", serviceID);
 
     if (service->codedDataBufferHeap)
